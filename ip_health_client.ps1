@@ -37,31 +37,36 @@ function Test-HttpHead {
 function Test-TlsBundle {
   param([string]$IP, [string]$HostName)
 
-  if (-not $OpenSSL) { return [pscustomobject]@{ TLS13=$null; TLS12=$null; ALPN=$null; NoSNI=$null; WithSNI=$null } }
+  if (-not $OpenSSL) {
+    return [pscustomobject]@{ TLS13=$null; TLS12=$null; ALPN=$null; NoSNI=$null; WithSNI=$null }
+  }
+
+  # هر دوی این الگوها را قبول کن: CONNECTION ESTABLISHED | CONNECTED | Protocol version:
+  $successRegex = '(?ms)(CONNECTION ESTABLISHED|^CONNECTED|Protocol version:)'
 
   $res = [ordered]@{ TLS13=$false; TLS12=$false; ALPN=$null; NoSNI=$false; WithSNI=$null }
 
   try {
     $o13 = ("" | & $OpenSSL s_client -connect "$IP:443" -tls1_3 -brief -alpn h2,http/1.1 2>&1) -join "`n"
-    if ($o13 -match "CONNECTION ESTABLISHED") { $res.TLS13 = $true }
-    if ($o13 -match "ALPN protocol:\s*(\S+)") { $res.ALPN = $Matches[1] }
+    if ($o13 -match $successRegex) { $res.TLS13 = $true }
+    if ($o13 -match 'ALPN protocol:\s*(\S+)') { $res.ALPN = $Matches[1] }
   } catch {}
 
   try {
     $o12 = ("" | & $OpenSSL s_client -connect "$IP:443" -tls1_2 -brief 2>&1) -join "`n"
-    if ($o12 -match "CONNECTION ESTABLISHED") { $res.TLS12 = $true }
+    if ($o12 -match $successRegex) { $res.TLS12 = $true }
   } catch {}
 
   try {
     $o0 = ("" | & $OpenSSL s_client -connect "$IP:443" -brief 2>&1) -join "`n"
-    if ($o0 -match "CONNECTION ESTABLISHED") { $res.NoSNI = $true }
+    if ($o0 -match $successRegex) { $res.NoSNI = $true }
   } catch {}
 
   if ($HostName) {
     try {
       $oS = ("" | & $OpenSSL s_client -connect "$IP:443" -servername $HostName -brief -alpn h2,http/1.1 2>&1) -join "`n"
-      $res.WithSNI = [bool]($oS -match "CONNECTION ESTABLISHED")
-      if (-not $res.ALPN -and $oS -match "ALPN protocol:\s*(\S+)") { $res.ALPN = $Matches[1] }
+      $res.WithSNI = [bool]($oS -match $successRegex)
+      if (-not $res.ALPN -and $oS -match 'ALPN protocol:\s*(\S+)') { $res.ALPN = $Matches[1] }
     } catch { $res.WithSNI = $false }
   }
 
