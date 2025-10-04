@@ -2,13 +2,13 @@
 
 بدون کلون/کپی، مستقیم از گیت‌هاب اجرا کن:
 
-curl -fsSL https://raw.githubusercontent.com/<username>/ip-health-check/main/vps_iptest.sh | sudo bash -s -- start
+curl -fsSL https://raw.githubusercontent.com/vahid162/ip-health-check/main/vps_iptest.sh | sudo bash -s -- start
 
 
 این یک خط همه‌چیز را بالا می‌آورد، پورت‌ها را باز می‌کند و گزارش می‌سازد. (اگر «getcwd» خطا دیدی، اول cd /root بزن و دوباره همین دستور را اجرا کن.)
 
 می‌توانی برای توقف هم بگویی:
-curl -fsSL https://raw.githubusercontent.com/<username>/ip-health-check/main/vps_iptest.sh | sudo bash -s -- stop
+curl -fsSL https://raw.githubusercontent.com/vahid162/ip-health-check/main/vps_iptest.sh | sudo bash -s -- stop
 
 روی ویندوز (PowerShell)
 
