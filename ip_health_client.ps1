@@ -40,33 +40,41 @@ function Test-TlsBundle {
     return [pscustomobject]@{ TLS13=$null; TLS12=$null; ALPN=$null; NoSNI=$null; WithSNI=$null }
   }
 
-  # robust success detection for various openssl outputs
-  $successRegex = '(?ms)(CONNECTION ESTABLISHED|^CONNECTED|Protocol version:)'
+  # خروجی‌های ممکن s_client: CONNECTION ESTABLISHED | CONNECTED(...) | Protocol version:
+  $successRegex = '(?ms)(CONNECTION ESTABLISHED|^CONNECTED|\bProtocol version:)'
+
+  function Run-SSLArgs {
+    param([string[]]$ArgList)
+    $out = ("" | & $OpenSSL @ArgList 2>&1) -join "`n"
+    $code = $LASTEXITCODE
+    $isFail = ($out -match 'handshake failure|alert handshake|unexpected eof')
+    return ,$out,$code,$isFail
+  }
 
   $res = [ordered]@{ TLS13=$false; TLS12=$false; ALPN=$null; NoSNI=$false; WithSNI=$null }
 
-  try {
-    $o13 = ("" | & $OpenSSL s_client -connect "$IP:443" -tls1_3 -brief -alpn h2,http/1.1 2>&1) -join "`n"
-    if ($o13 -match $successRegex) { $res.TLS13 = $true }
-    if ($o13 -match 'ALPN protocol:\s*(\S+)') { $res.ALPN = $Matches[1] }
-  } catch {}
+  # TLS 1.3
+  $r = Run-SSLArgs @('s_client','-connect',"$IP`:443",'-tls1_3','-brief','-alpn','h2,http/1.1','-ign_eof')
+  $o13,$c13,$f13 = $r[0],$r[1],$r[2]
+  if (($o13 -match $successRegex -or $c13 -eq 0) -and -not $f13) { $res.TLS13 = $true }
+  if ($o13 -match 'ALPN protocol:\s*(\S+)') { $res.ALPN = $Matches[1] }
 
-  try {
-    $o12 = ("" | & $OpenSSL s_client -connect "$IP:443" -tls1_2 -brief 2>&1) -join "`n"
-    if ($o12 -match $successRegex) { $res.TLS12 = $true }
-  } catch {}
+  # TLS 1.2
+  $r = Run-SSLArgs @('s_client','-connect',"$IP`:443",'-tls1_2','-brief','-ign_eof')
+  $o12,$c12,$f12 = $r[0],$r[1],$r[2]
+  if (($o12 -match $successRegex -or $c12 -eq 0) -and -not $f12) { $res.TLS12 = $true }
 
-  try {
-    $o0 = ("" | & $OpenSSL s_client -connect "$IP:443" -brief 2>&1) -join "`n"
-    if ($o0 -match $successRegex) { $res.NoSNI = $true }
-  } catch {}
+  # بدون SNI
+  $r = Run-SSLArgs @('s_client','-connect',"$IP`:443",'-brief','-ign_eof')
+  $o0,$c0,$f0 = $r[0],$r[1],$r[2]
+  if (($o0 -match $successRegex -or $c0 -eq 0) -and -not $f0) { $res.NoSNI = $true }
 
+  # با SNI (اگر دامنه دادی)
   if ($HostName) {
-    try {
-      $oS = ("" | & $OpenSSL s_client -connect "$IP:443" -servername $HostName -brief -alpn h2,http/1.1 2>&1) -join "`n"
-      $res.WithSNI = [bool]($oS -match $successRegex)
-      if (-not $res.ALPN -and $oS -match 'ALPN protocol:\s*(\S+)') { $res.ALPN = $Matches[1] }
-    } catch { $res.WithSNI = $false }
+    $r = Run-SSLArgs @('s_client','-connect',"$IP`:443",'-servername',$HostName,'-brief','-alpn','h2,http/1.1','-ign_eof')
+    $oS,$cS,$fS = $r[0],$r[1],$r[2]
+    $res.WithSNI = (($oS -match $successRegex -or $cS -eq 0) -and -not $fS)
+    if (-not $res.ALPN -and $oS -match 'ALPN protocol:\s*(\S+)') { $res.ALPN = $Matches[1] }
   }
 
   return [pscustomobject]$res
