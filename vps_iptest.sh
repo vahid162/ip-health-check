@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# vps_iptest.sh  -- Ubuntu 22.x
-# Starts minimal test listeners on :80 (HTTP) and :443 (TLS) and writes a brief report.
+# vps_iptest.sh -- Ubuntu 22.x
+# Starts minimal test listeners on :80 (HTTP) and :443 (TLS) + writes a brief report.
 
 set -euo pipefail
 
@@ -22,7 +22,6 @@ allow_ports() {
 }
 
 ensure_tools() {
-  # try-install if missing (Ubuntu 22)
   sudo apt-get update -y
   sudo apt-get install -y python3 openssl curl
   need_cmd python3
@@ -32,7 +31,7 @@ ensure_tools() {
 
 start_services() {
   sudo mkdir -p "$WORKDIR"
-  cd /          # avoid getcwd issues if WORKDIR is removed later
+  cd /
   cd "$WORKDIR"
 
   echo "OK" | sudo tee "$WORKDIR/index.html" >/dev/null
@@ -45,14 +44,14 @@ start_services() {
     echo $! | sudo tee "$HTTP_PID" >/dev/null
   fi
 
-  # Self-signed cert + TLS on :443
+  # Self-signed cert + TLS on :443 (with ALPN for h2/http1.1)
   if [ ! -f "$WORKDIR/key.pem" ] || [ ! -f "$WORKDIR/cert.pem" ]; then
     sudo openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 1 -nodes -subj "/CN=test.local"
   fi
   if [ -f "$TLS_PID" ] && ps -p "$(cat "$TLS_PID")" >/dev/null 2>&1; then
     echo "TLS test server already running (pid $(cat "$TLS_PID"))."
   else
-    sudo nohup openssl s_server -accept 443 -cert cert.pem -key key.pem -www > "$TLS_LOG" 2>&1 &
+    sudo nohup openssl s_server -accept 443 -cert cert.pem -key key.pem -www -alpn h2,http/1.1 > "$TLS_LOG" 2>&1 &
     echo $! | sudo tee "$TLS_PID" >/dev/null
   fi
 }
